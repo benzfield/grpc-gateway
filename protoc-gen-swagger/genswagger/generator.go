@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/ghodss/yaml"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/descriptor"
 	gen "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/generator"
@@ -60,7 +61,7 @@ func mergeTargetFile(targets []*wrapper, mergeFileName string) *wrapper {
 }
 
 // convert swagger file obj to plugin.CodeGeneratorResponse_File
-func encodeSwagger(file *wrapper) *plugin.CodeGeneratorResponse_File {
+func encodeJson(file *wrapper) *plugin.CodeGeneratorResponse_File {
 	var formatted bytes.Buffer
 	enc := json.NewEncoder(&formatted)
 	enc.SetIndent("", "  ")
@@ -72,6 +73,23 @@ func encodeSwagger(file *wrapper) *plugin.CodeGeneratorResponse_File {
 	return &plugin.CodeGeneratorResponse_File{
 		Name:    proto.String(output),
 		Content: proto.String(formatted.String()),
+	}
+}
+
+// convert swagger file obj to plugin.CodeGeneratorResponse_File (yaml format)
+func encodeYaml(file *wrapper) *plugin.CodeGeneratorResponse_File {	
+	y, err := yaml.Marshal(*file.swagger)
+	if err != nil {
+		glog.V(1).Infof("err: %v", err)
+		return nil
+	}
+	name := file.fileName
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	output := fmt.Sprintf("%s.swagger.yaml", base)
+	return &plugin.CodeGeneratorResponse_File{
+		Name:    proto.String(output),
+		Content: proto.String(string(y)),
 	}
 }
 
@@ -120,11 +138,11 @@ func (g *generator) Generate(targets []*descriptor.File) ([]*plugin.CodeGenerato
 
 	if g.reg.IsAllowMerge() {
 		targetSwagger := mergeTargetFile(swaggers, g.reg.GetMergeFileName())
-		files = append(files, encodeSwagger(targetSwagger))
+		files = append(files, encodeYaml(targetSwagger))
 		glog.V(1).Infof("New swagger file will emit")
 	} else {
 		for _, file := range swaggers {
-			files = append(files, encodeSwagger(file))
+			files = append(files, encodeYaml(file))
 			glog.V(1).Infof("New swagger file will emit")
 		}
 	}
